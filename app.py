@@ -446,6 +446,112 @@ def recent_feedback_page():
     """Render the recent feedback page"""
     return render_template('recent-feedback.html')
 
+@app.route('/edit_feedback/<feedback_id>')
+def edit_feedback_page(feedback_id):
+    """Render the edit feedback page"""
+    return render_template('edit-feedback.html', feedback_id=feedback_id)
+
+@app.route('/get_feedback_details/<feedback_id>')
+def get_feedback_details_for_edit(feedback_id):
+    """Get details for a specific feedback item for editing"""
+    try:
+        # Load data
+        df = load_data()
+        
+        # Find the feedback item by ID
+        if 'ID' not in df.columns:
+            df['ID'] = range(1, len(df) + 1)
+            
+        # Convert ID to integer for comparison
+        feedback_id = int(feedback_id)
+        feedback_item = df[df['ID'] == feedback_id]
+        
+        if len(feedback_item) == 0:
+            return jsonify({'error': 'Feedback not found'}), 404
+        
+        # Convert the first (and only) row to a dictionary
+        feedback_dict = feedback_item.iloc[0].to_dict()
+        
+        # Convert any datetime objects to strings for JSON serialization
+        for key, value in feedback_dict.items():
+            if isinstance(value, pd.Timestamp):
+                feedback_dict[key] = value.isoformat()
+        
+        # Check for Last Updated fields
+        if 'Last Updated By' not in feedback_dict:
+            feedback_dict['Last Updated By'] = None
+        if 'Last Updated Time' not in feedback_dict:
+            feedback_dict['Last Updated Time'] = None
+            
+        return jsonify(feedback_dict)
+    
+    except Exception as e:
+        logging.error(f"Error getting feedback details: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/update_feedback', methods=['POST'])
+def update_feedback():
+    """Update feedback data"""
+    try:
+        # Get JSON data from request
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        # Required fields
+        required_fields = ['id', 'category', 'contact_user', 'status', 'sentiment', 'updated_by', 'updated_time']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'success': False, 'message': f'Missing required field: {field}'}), 400
+        
+        # Load data
+        df = load_data()
+        
+        # Find the feedback item by ID
+        if 'ID' not in df.columns:
+            df['ID'] = range(1, len(df) + 1)
+            
+        # Convert ID to integer for comparison
+        feedback_id = int(data['id'])
+        index = df[df['ID'] == feedback_id].index
+        
+        if len(index) == 0:
+            return jsonify({'success': False, 'message': 'Feedback not found'}), 404
+        
+        # Update the data
+        df.loc[index, 'Main Category'] = data['category']
+        df.loc[index, 'Sub Category'] = data['sub_category']
+        df.loc[index, 'Contact User'] = data['contact_user']
+        df.loc[index, 'Status'] = data['status']
+        
+        # Add sentiment field if it doesn't exist
+        if 'Sentiment' not in df.columns:
+            df['Sentiment'] = None
+        df.loc[index, 'Sentiment'] = data['sentiment']
+        
+        # Add Last Updated fields if they don't exist
+        if 'Last Updated By' not in df.columns:
+            df['Last Updated By'] = None
+        if 'Last Updated Time' not in df.columns:
+            df['Last Updated Time'] = None
+            
+        df.loc[index, 'Last Updated By'] = data['updated_by']
+        df.loc[index, 'Last Updated Time'] = data['updated_time']
+        
+        # Save the updated data back to Excel
+        try:
+            df.to_excel(DATA_FILE, index=False)
+            logging.info(f"Successfully updated feedback ID {feedback_id}")
+            return jsonify({'success': True, 'message': 'Feedback updated successfully'})
+        except Exception as e:
+            logging.error(f"Error saving data to Excel: {str(e)}")
+            return jsonify({'success': False, 'message': f'Error saving data: {str(e)}'}), 500
+    
+    except Exception as e:
+        logging.error(f"Error updating feedback: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 if __name__ == '__main__':
     # Get server configuration from environment variables or use defaults
     host = os.environ.get('FLASK_HOST', '0.0.0.0')

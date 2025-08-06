@@ -341,10 +341,22 @@ function updateFeedbackTable(feedback) {
             // Add details page link with eye icon
             const detailsLink = document.createElement('a');
             detailsLink.href = `/feedback_details/${item.ID}`;
-            detailsLink.className = 'btn btn-sm btn-outline-primary';
+            detailsLink.className = 'btn btn-sm btn-outline-primary me-1';
             detailsLink.innerHTML = '<i class="fas fa-eye"></i>';
             detailsLink.setAttribute('title', 'View Details');
             actionsCell.appendChild(detailsLink);
+            
+            // Add edit button with edit icon
+            const editBtn = document.createElement('button');
+            editBtn.className = 'btn btn-sm btn-outline-success';
+            editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+            editBtn.setAttribute('title', 'Edit Feedback');
+            editBtn.setAttribute('data-feedback-id', item.ID);
+            editBtn.addEventListener('click', function() {
+                // You can add edit functionality here or redirect to an edit page
+                window.location.href = `/edit_feedback/${this.getAttribute('data-feedback-id')}`;
+            });
+            actionsCell.appendChild(editBtn);
             
             row.appendChild(actionsCell);
             

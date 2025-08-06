@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Fan Feedback</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* Loading overlay styles */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            flex-direction: column;
+        }
+        
+        #loading-overlay .spinner-border {
+            width: 5rem;
+            height: 5rem;
+        }
+        
+        #loading-overlay .loading-text {
+            margin-top: 1rem;
+            font-size: 1.5rem;
+            color: #FF5910; /* Mets orange */
+        }
+        
+        /* Mets blue card headers */
+        .card-header.bg-primary {
+            background-color: #002D72 !important;
+        }
+        
+        /* Mets blue for navbar */
+        .navbar-dark.bg-primary {
+            background-color: #002D72 !important;
+        }
+        
+        /* Mets blue for buttons */
+        .btn-primary {
+            background-color: #002D72 !important;
+            border-color: #002D72 !important;
+        }
+        
+        /* Mets blue for modal headers */
+        .modal-header.bg-primary {
+            background-color: #002D72 !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="loading-text">Loading feedback data...</div>
+    </div>
+    
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}">
+                <i class="fas fa-comments me-2"></i>
+                <span>Fan Feedback Analytics Dashboard</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-chart-pie me-1"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('recent_feedback_page') }}">
+                            <i class="fas fa-list me-1"></i> Recent Feedback
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4">
+        <!-- Error Alert -->
+        <div id="edit-error" class="alert alert-danger" style="display: none;"></div>
+        
+        <!-- Success Alert -->
+        <div id="edit-success" class="alert alert-success" style="display: none;">
+            Feedback updated successfully!
+        </div>
+
+        <!-- Edit Feedback Form -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Edit Fan Feedback</h5>
+                <a href="{{ url_for('recent_feedback_page') }}" class="btn btn-sm btn-outline-light">
+                    <i class="fas fa-arrow-left me-1"></i> Back to List
+                </a>
+            </div>
+            <div class="card-body">
+                <form id="edit-feedback-form">
+                    <input type="hidden" id="feedback-id" name="feedback-id" value="{{ feedback_id }}">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="first-name" class="form-label">First Name</label>
+                            <input type="text" class="form-control" id="first-name" name="first-name" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="last-name" class="form-label">Last Name</label>
+                            <input type="text" class="form-control" id="last-name" name="last-name" readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="category" class="form-label">Category</label>
+                            <select class="form-select" id="category" name="category" required>
+                                <!-- Categories will be populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="sub-category" class="form-label">Sub Category</label>
+                            <input type="text" class="form-control" id="sub-category" name="sub-category">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="contact-user" class="form-label">Contact User</label>
+                            <select class="form-select" id="contact-user" name="contact-user">
+                                <option value="Yes">Yes</option>
+                                <option value="No">No</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="Not Started">Not Started</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Completed">Completed</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="sentiment" class="form-label">Sentiment</label>
+                            <select class="form-select" id="sentiment" name="sentiment">
+                                <option value="Positive">Positive</option>
+                                <option value="Neutral">Neutral</option>
+                                <option value="Negative">Negative</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="feedback-text" class="form-label">Feedback</label>
+                        <textarea class="form-control" id="feedback-text" name="feedback-text" rows="5" readonly></textarea>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Last Updated By</label>
+                            <input type="text" class="form-control" id="updated-by" name="updated-by" value="{{ session.get('user_name', 'Admin User') }}" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Last Updated Time</label>
+                            <input type="text" class="form-control" id="updated-time" name="updated-time" readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end mt-4">
+                        <a href="{{ url_for('recent_feedback_page') }}" class="btn btn-secondary me-2">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/edit-feedback.js') }}"></script>
+</body>
+</html>
