@@ -1,0 +1,188 @@
+/* Fan Feedback Analytics Dashboard Styles */
+
+/* Main styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+    color: #333;
+}
+
+/* Card styles */
+.card {
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    border: none;
+}
+
+.card-header {
+    border-radius: 8px 8px 0 0;
+    font-weight: 600;
+}
+
+/* Chart container styles */
+.chart-container {
+    position: relative;
+    margin: auto;
+    height: 100%;
+    min-height: 300px;
+}
+
+/* KPI card styles */
+.kpis-section .card {
+    transition: transform 0.3s ease;
+}
+
+.kpis-section .card:hover {
+    transform: translateY(-5px);
+}
+
+.kpis-section .card-title {
+    color: #6c757d;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+.kpis-section .card-text {
+    color: #FF5910;
+    font-weight: 700;
+    margin-bottom: 0;
+}
+
+/* Navbar styles */
+.navbar-brand img {
+    max-height: 40px;
+}
+
+.navbar {
+    background-color: #002D72 !important;
+}
+
+.navbar-dark .navbar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .nav-link.active {
+    color: #ffffff;
+}
+
+/* Filter section styles */
+.filters-section {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.filters-section label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+}
+
+/* Button styles */
+.btn-primary {
+    background-color: #FF5910;
+    border-color: #FF5910;
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+    background-color: #FF5910 !important;
+    border-color: #FF5910 !important;
+}
+
+.btn-outline-primary {
+    color: #FF5910;
+    border-color: #FF5910;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus,
+.btn-outline-primary:active {
+    background-color: #FF5910;
+    border-color: #FF5910;
+}
+
+/* Table styles */
+.table thead th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+    color: #495057;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(255, 69, 0, 0.05);
+}
+
+/* Pagination styles */
+.pagination .page-link {
+    color: #FF5910;
+}
+
+.pagination .page-item.active .page-link {
+    background-color: #FF5910;
+    border-color: #FF5910;
+}
+
+/* Alert styles */
+.alert-info {
+    background-color: #e6f7ff;
+    border-color: #b3e0ff;
+    color: #0070a8;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .kpis-section .card {
+        margin-bottom: 15px;
+    }
+    
+    .filters-section .form-group {
+        margin-bottom: 15px;
+    }
+}
+
+/* Badge styles */
+.badge {
+    font-weight: 500;
+    padding: 0.4em 0.6em;
+}
+
+/* No data message styles */
+.no-data-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6c757d;
+}
+
+.no-data-message p {
+    font-size: 1.1rem;
+    margin-bottom: 0;
+}
+
+/* Loading spinner styles */
+.spinner-border.text-primary {
+    color: #FF5910 !important;
+}
+
+/* Modal styles */
+.modal-header {
+    border-radius: 8px 8px 0 0;
+}
+
+.modal-content {
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Feedback details styles */
+.feedback-content {
+    font-size: 1.1rem;
+    line-height: 1.6;
+}

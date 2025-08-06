@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fan Feedback Analytics Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <style>
+        /* Loading overlay styles */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            flex-direction: column;
+        }
+        
+        #loading-overlay .spinner-border {
+            width: 5rem;
+            height: 5rem;
+        }
+        
+        #loading-overlay .loading-text {
+            margin-top: 1rem;
+            font-size: 1.5rem;
+            color: #FF5910;
+        }
+        
+        /* Mets blue card headers */
+        .card-header.bg-primary {
+            background-color: #002D72 !important;
+        }
+        
+        /* Mets blue for navbar */
+        .navbar-dark.bg-primary {
+            background-color: #002D72 !important;
+        }
+        
+        /* Mets orange for buttons */
+        .btn-primary {
+            background-color: #FF5910 !important;
+            border-color: #FF5910 !important;
+        }
+        
+        /* Mets blue for modal headers */
+        .modal-header.bg-primary {
+            background-color: #002D72 !important;
+        }
+
+        /* No data message styling */
+        .no-data-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #6c757d;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="loading-text">Loading feedback data...</div>
+    </div>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}">
+                <i class="fas fa-baseball-ball me-2"></i>
+                <span>NY Mets Fan Feedback Analytics</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-chart-pie me-1"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('recent_feedback_page') }}">
+                            <i class="fas fa-list me-1"></i> Recent Feedback
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4">
+        <!-- Error Alert -->
+        <div id="dashboard-error" class="alert alert-danger" style="display: none;"></div>
+
+        <!-- Date Range Display -->
+        <div class="alert alert-info mb-4" id="date-range-display">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Fan Feedback Data Coverage:</strong> <span id="date-range-text">Loading...</span>
+                </div>
+                <div class="small text-muted">
+                    <i class="fas fa-clock"></i> <strong>Latest feedback data:</strong> <span id="last-refresh-time">Loading...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters Section -->
+        <div class="filters-section mb-4">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="category-filter">Category</label>
+                        <select class="form-control" id="category-filter">
+                            <option value="all">All Categories</option>
+                            <!-- Category options will be populated dynamically -->
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="date-range-filter">Date Range</label>
+                        <select class="form-control mb-2" id="date-range-filter">
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="last7">Last 7 Days</option>
+                            <option value="last30" selected>Last 30 Days</option>
+                            <option value="custom">Custom Range</option>
+                        </select>
+                        <div id="custom-date-range" class="mt-2" style="display: none;">
+                            <div class="row">
+                                <div class="col-6">
+                                    <label for="date-from" class="form-label">From</label>
+                                    <input type="date" class="form-control" id="date-from">
+                                </div>
+                                <div class="col-6">
+                                    <label for="date-to" class="form-label">To</label>
+                                    <input type="date" class="form-control" id="date-to">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <div class="form-group w-100">
+                        <div class="d-flex justify-content-end">
+                            <button id="reset-filters" class="btn btn-secondary me-2">
+                                <i class="bi bi-arrow-counterclockwise"></i> Reset
+                            </button>
+                            <button id="apply-filters" class="btn btn-primary">Apply Filters</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs Section -->
+        <div class="kpis-section mb-4">
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Total Feedback</h5>
+                            <p class="card-text display-4" id="total-feedback-kpi">0</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Category Count</h5>
+                            <p class="card-text display-4" id="category-count-kpi">0</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Require Contact</h5>
+                            <p class="card-text display-4" id="contact-user-kpi">0</p>
+                            <p class="card-text text-muted" id="contact-user-percentage">0%</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Resolved Feedback</h5>
+                            <p class="card-text display-4" id="resolved-kpi">0</p>
+                            <p class="card-text text-muted" id="resolved-percentage">0%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sentiment Distribution Cards -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h5 class="mb-3">Sentiment Distribution</h5>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100 border-success">
+                        <div class="card-body text-center">
+                            <h5 class="card-title text-success">Positive</h5>
+                            <p class="card-text display-4" id="positive-sentiment-kpi">0</p>
+                            <p class="card-text text-muted" id="positive-sentiment-percentage">0%</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100 border-warning">
+                        <div class="card-body text-center">
+                            <h5 class="card-title text-warning">Neutral</h5>
+                            <p class="card-text display-4" id="neutral-sentiment-kpi">0</p>
+                            <p class="card-text text-muted" id="neutral-sentiment-percentage">0%</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100 border-danger">
+                        <div class="card-body text-center">
+                            <h5 class="card-title text-danger">Negative</h5>
+                            <p class="card-text display-4" id="negative-sentiment-kpi">0</p>
+                            <p class="card-text text-muted" id="negative-sentiment-percentage">0%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Resolution Status Cards -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h5 class="mb-3">Resolution Status (for feedback requiring contact)</h5>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Not Started</h5>
+                            <p class="card-text display-4" id="not-started-kpi">0</p>
+                            <p class="card-text text-muted" id="not-started-percentage">0%</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">In Progress</h5>
+                            <p class="card-text display-4" id="in-progress-kpi">0</p>
+                            <p class="card-text text-muted" id="in-progress-percentage">0%</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">Completed</h5>
+                            <p class="card-text display-4" id="completed-kpi">0</p>
+                            <p class="card-text text-muted" id="completed-percentage">0%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="charts-section">
+            <div class="row">
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0">Feedback Categories</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container" style="position: relative; height: 400px;">
+                                <canvas id="category-chart"></canvas>
+                                <div id="no-category-data" class="no-data-message">
+                                    <i class="fas fa-chart-bar fa-3x mb-3" style="color: #002D72;"></i>
+                                    <p>No category data available for the selected filters</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0">Sentiment Distribution</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container" style="position: relative; height: 400px;">
+                                <canvas id="sentiment-chart"></canvas>
+                                <div id="no-sentiment-data" class="no-data-message">
+                                    <i class="fas fa-chart-pie fa-3x mb-3" style="color: #FF5910;"></i>
+                                    <p>No sentiment data available for the selected filters</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Contact User Distribution Chart -->
+            <div class="row">
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0">Contact User Distribution</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container" style="position: relative; height: 400px;">
+                                <canvas id="contact-user-chart"></canvas>
+                                <div id="no-contact-user-data" class="no-data-message">
+                                    <i class="fas fa-chart-pie fa-3x mb-3" style="color: #002D72;"></i>
+                                    <p>No contact user data available for the selected filters</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0">Resolution Status</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container" style="position: relative; height: 400px;">
+                                <canvas id="resolution-chart"></canvas>
+                                <div id="no-resolution-data" class="no-data-message">
+                                    <i class="fas fa-chart-pie fa-3x mb-3" style="color: #FF5910;"></i>
+                                    <p>No resolution status data available for the selected filters</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-12 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0">Daily Feedback Volume</h5>
+                            <small class="text-white">Number of feedback submissions each day</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container" style="position: relative; height: 400px;">
+                                <canvas id="daily-feedback-chart"></canvas>
+                                <div id="no-daily-data" class="no-data-message">
+                                    <i class="fas fa-chart-line fa-3x mb-3" style="color: #002D72;"></i>
+                                    <p>No daily feedback data available for the selected filters</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feedback Details Modal -->
+        <div class="modal fade" id="feedbackDetailsModal" tabindex="-1" aria-labelledby="feedbackDetailsModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title" id="feedbackDetailsModalLabel">Feedback Details</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="text-center" id="feedback-details-loading">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                        <div id="feedback-details-content" style="display: none;">
+                            <!-- Content will be populated dynamically -->
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
