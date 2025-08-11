@@ -717,24 +717,219 @@ function openEmailModal(email, feedbackId, fanName) {
     const emailToInput = document.getElementById('emailTo');
     const emailSubjectInput = document.getElementById('emailSubject');
     const emailBodyInput = document.getElementById('emailBody');
+    const emailLoading = document.getElementById('emailLoading');
+    const generateButton = document.getElementById('generateEmailBtn');
+    const sendEmailBtn = document.getElementById('sendEmailBtn');
+    
+    // Generate a unique tracking ID for this email
+    const trackingId = generateEmailTrackingId(feedbackId);
+    
+    // Store the tracking ID in a hidden field
+    document.getElementById('emailTrackingId').value = trackingId;
     
     // Pre-fill the form fields
     emailToInput.value = email;
-    emailSubjectInput.value = `Fan Feedback Follow-up #${feedbackId}`;
+    emailSubjectInput.value = `Fan Feedback Follow-up #${feedbackId} [Ref:${trackingId}]`;
     
-    // Create a template email body
-    const currentDate = new Date().toLocaleDateString();
-    let bodyTemplate = `Dear ${fanName},\n\n`;
-    bodyTemplate += `Thank you for your feedback (ID: ${feedbackId}). We appreciate you taking the time to share your thoughts with us.\n\n`;
-    bodyTemplate += `We would like to follow up on the specific points you raised. Could you please provide additional details about your experience?\n\n`;
-    bodyTemplate += `Best regards,\n`;
-    bodyTemplate += `Fan Support Team\n`;
-    bodyTemplate += `${currentDate}`;
-    
-    emailBodyInput.value = bodyTemplate;
+    // Show a loading placeholder in the email body
+    emailBodyInput.value = 'Generating personalized response...';
     
     // Show the modal
     emailModal.show();
+    
+    // Set up the generate button click handler for regenerating content
+    if (generateButton) {
+        generateButton.onclick = function() {
+            generateEmailWithLLM(feedbackId, fanName, emailBodyInput, emailLoading, generateButton, trackingId);
+        };
+    }
+    
+    // Set up send email button to launch Outlook
+    if (sendEmailBtn) {
+        sendEmailBtn.onclick = function() {
+            // Record the email tracking ID in the database before sending
+            recordEmailTracking(feedbackId, trackingId).then(() => {
+                sendEmailViaOutlook(emailToInput.value, emailSubjectInput.value, emailBodyInput.value);
+            }).catch(error => {
+                console.error('Error recording email tracking:', error);
+                // Still send the email even if tracking fails
+                sendEmailViaOutlook(emailToInput.value, emailSubjectInput.value, emailBodyInput.value);
+            });
+        };
+    }
+    
+    // Automatically generate AI content when modal opens
+    setTimeout(() => {
+        generateEmailWithLLM(feedbackId, fanName, emailBodyInput, emailLoading, generateButton, trackingId);
+    }, 300); // Small delay to ensure modal is fully displayed
+}
+
+// Generate email content using Straive LLM
+async function generateEmailWithLLM(feedbackId, fanName, emailBodyInput, emailLoadingElement, generateButton, trackingId) {
+    // Show loading state
+    if (emailLoadingElement) emailLoadingElement.style.display = 'block';
+    if (generateButton) generateButton.disabled = true;
+    
+    try {
+        // First, get the feedback details
+        const feedbackResponse = await fetch(`/get_feedback_details/${feedbackId}`);
+        const feedbackData = await feedbackResponse.json();
+        
+        if (!feedbackResponse.ok) {
+            throw new Error('Failed to fetch feedback details');
+        }
+        
+        // Prepare the prompt for the LLM - keep it concise
+        const prompt = {
+            contents: [{
+                parts: [{
+                    text: `Write a brief, professional email response to this fan feedback:
+                    
+                    Name: ${fanName}
+                    Category: ${feedbackData['Main Category'] || 'N/A'}
+                    Sub Category: ${feedbackData['Sub Category'] || 'N/A'}
+                    Status: ${feedbackData['Status'] || 'Pending'}
+                    Sentiment: ${feedbackData['Sentiment'] || 'Neutral'}
+                    Feedback: ${feedbackData['Feedback'] || 'No feedback text available.'}
+                    
+                    Keep it under 150 words with greeting, short body, and sign-off. Be direct and solution-focused.`
+                }]
+            }]
+        };
+        
+        // Call the Straive LLM API
+        const llmResponse = await fetch('https://llmfoundry.straive.com/gemini/v1beta/models/gemini-2.0-flash:generateContent', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImJoYXJhdGhrdW1hci5yZWRkeUBzdHJhaXZlLmNvbSJ9.i17KBRGPox17bkpxAjrfBJNoa6x7E0wrC_NprQeli4Y`
+            },
+            body: JSON.stringify(prompt)
+        });
+        
+        const llmData = await llmResponse.json();
+        
+        if (!llmResponse.ok || !llmData.candidates || !llmData.candidates[0].content.parts[0].text) {
+            throw new Error('Failed to generate email content');
+        }
+        
+        // Update the email body with the generated content
+        emailBodyInput.value = llmData.candidates[0].content.parts[0].text;
+        
+        // Show success notification
+        showNotification('Email content generated successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error generating email content:', error);
+        showNotification('Failed to generate email content. Please try again.', 'error');
+    } finally {
+        // Hide loading state
+        if (emailLoadingElement) emailLoadingElement.style.display = 'none';
+        if (generateButton) generateButton.disabled = false;
+    }
+}
+
+// Generate a unique tracking ID for email correspondence
+function generateEmailTrackingId(feedbackId) {
+    // Create a tracking ID that includes the feedback ID, timestamp, and random digits
+    const timestamp = Date.now();
+    const randomDigits = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    return `FFA-${feedbackId}-${timestamp}-${randomDigits}`;
+}
+
+// Record the email tracking ID in the database
+async function recordEmailTracking(feedbackId, trackingId) {
+    try {
+        const response = await fetch('/record_email_tracking', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                feedback_id: feedbackId,
+                tracking_id: trackingId,
+                sent_time: new Date().toISOString()
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.message || 'Failed to record email tracking');
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('Error recording email tracking:', error);
+        throw error;
+    }
+}
+
+// Send email via Outlook using mailto protocol
+function sendEmailViaOutlook(to, subject, body) {
+    // Get the tracking ID from the hidden field
+    const trackingId = document.getElementById('emailTrackingId').value;
+    
+    // Append the tracking ID to the email body in a subtle footer
+    const bodyWithTracking = body + 
+        '\n\n---\n' +
+        `Ref: ${trackingId} - Please keep this reference in your reply for our tracking system.`;
+    
+    // Create the mailto URL with all parameters
+    const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyWithTracking)}`;
+    
+    try {
+        // Open the default email client (Outlook)
+        window.location.href = mailtoUrl;
+        
+        // Close the modal after a short delay
+        setTimeout(() => {
+            const emailModal = bootstrap.Modal.getInstance(document.getElementById('emailDraftModal'));
+            if (emailModal) {
+                emailModal.hide();
+            }
+            // Show success notification
+            showNotification('Email launched in Outlook', 'success');
+        }, 500);
+    } catch (error) {
+        console.error('Error launching email client:', error);
+        showNotification('Error launching email client. Please try again.', 'error');
+    }
+}
+
+// Show notification
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type} alert-dismissible fade show notification-popup`;
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Add styles if they don't exist
+    if (!document.getElementById('notification-styles')) {
+        const styles = document.createElement('style');
+        styles.id = 'notification-styles';
+        styles.textContent = `
+            .notification-popup {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 1050;
+                min-width: 300px;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            }
+        `;
+        document.head.appendChild(styles);
+    }
+    
+    // Auto dismiss after 5 seconds
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 5000);
 }
 
 // Show loading state

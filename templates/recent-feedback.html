@@ -226,10 +226,19 @@
                                 <label for="emailBody" class="form-label">Message:</label>
                                 <textarea class="form-control" id="emailBody" rows="10" required></textarea>
                             </div>
+                            <!-- Hidden field to store email tracking ID -->
+                            <input type="hidden" id="emailTrackingId">
                         </form>
                     </div>
                     <div class="modal-footer">
+                        <div id="emailLoading" style="display: none;" class="me-auto">
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span>Generating email content...</span>
+                        </div>
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary me-2" id="generateEmailBtn">
+                            <i class="fas fa-sync"></i> Regenerate with AI
+                        </button>
                         <button type="button" class="btn btn-success" id="sendEmailBtn">Send Email</button>
                     </div>
                 </div>

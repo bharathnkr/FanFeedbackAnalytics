@@ -552,6 +552,64 @@ def update_feedback():
         logging.error(f"Error updating feedback: {str(e)}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@app.route('/record_email_tracking', methods=['POST'])
+def record_email_tracking():
+    """Record email tracking information"""
+    try:
+        # Get JSON data from request
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        # Required fields
+        required_fields = ['feedback_id', 'tracking_id', 'sent_time']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'success': False, 'message': f'Missing required field: {field}'}), 400
+        
+        # Load data
+        df = load_data()
+        
+        # Find the feedback item by ID
+        if 'ID' not in df.columns:
+            df['ID'] = range(1, len(df) + 1)
+            
+        # Convert ID to integer for comparison
+        feedback_id = int(data['feedback_id'])
+        index = df[df['ID'] == feedback_id].index
+        
+        if len(index) == 0:
+            return jsonify({'success': False, 'message': 'Feedback not found'}), 404
+            
+        # Create or update email tracking columns
+        if 'Email Tracking ID' not in df.columns:
+            df['Email Tracking ID'] = None
+        if 'Email Sent Time' not in df.columns:
+            df['Email Sent Time'] = None
+        
+        # Update email tracking data
+        df.loc[index, 'Email Tracking ID'] = data['tracking_id']
+        df.loc[index, 'Email Sent Time'] = data['sent_time']
+        
+        # Save the updated data back to Excel
+        try:
+            df.to_excel(DATA_FILE, index=False)
+            logging.info(f"Successfully recorded email tracking for feedback ID {feedback_id} with tracking ID {data['tracking_id']}")
+            return jsonify({
+                'success': True, 
+                'message': 'Email tracking recorded successfully',
+                'feedback_id': feedback_id,
+                'tracking_id': data['tracking_id']
+            })
+        except Exception as e:
+            logging.error(f"Error saving email tracking data to Excel: {str(e)}")
+            return jsonify({'success': False, 'message': f'Error saving data: {str(e)}'}), 500
+    
+    except Exception as e:
+        logging.error(f"Error recording email tracking: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 if __name__ == '__main__':
     # Get server configuration from environment variables or use defaults
     host = os.environ.get('FLASK_HOST', '0.0.0.0')
