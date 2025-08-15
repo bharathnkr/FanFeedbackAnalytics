@@ -4,8 +4,9 @@ import logging
 import random
 from datetime import datetime, timedelta
 import pandas as pd
-from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for, flash, g
 from flask_cors import CORS
+from functools import wraps
 
 # Configure logging
 logging.basicConfig(
@@ -35,15 +36,83 @@ app.config['SESSION_TYPE'] = 'filesystem'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # Session expires after 8 hours
 
 # Data Configuration
-DATA_FILE = 'C:/Users/BReddy/Downloads/2025_06_03 Fan Feedback Sample Dataset.xlsx'
+# Using the specified file path
+DATA_FILE = r"C:\Users\BReddy\Downloads\Microsoft.RemoteDesktop_8wekyb3d8bbwe!App\TemporaryRDStorageFiles-{86740C75-1613-445F-9C27-874E93435744}\2025_06_03 Fan Feedback Sample Dataset.xlsx"
+# No fallback path needed since we have the exact file path
+
+# User authentication configuration
+# For demo purposes, we'll use a simple dictionary to store users
+# In a real application, this would be stored in a database with hashed passwords
+USERS = {
+    "admin@mets.com": {"password": "admin123", "role": "super_user", "name": "Admin User", "category": None},
+    "travel@mets.com": {"password": "travel123", "role": "category_user", "name": "Travel Manager", "category": "Travel"},
+    "food@mets.com": {"password": "food123", "role": "category_user", "name": "F&B Manager", "category": "Food & Beverage"},
+    "merch@mets.com": {"password": "merch123", "role": "category_user", "name": "Merchandise Manager", "category": "Merchandise"},
+    "tickets@mets.com": {"password": "tickets123", "role": "category_user", "name": "Ticket Manager", "category": "Tickets"},
+    "game@mets.com": {"password": "game123", "role": "category_user", "name": "Game Experience Manager", "category": "Game Experience"},
+    "app@mets.com": {"password": "app123", "role": "category_user", "name": "App Manager", "category": "Ballpark App"},
+    "staff@mets.com": {"password": "staff123", "role": "category_user", "name": "Staff Manager", "category": "Staff & Customer Service"},
+    "other@mets.com": {"password": "other123", "role": "category_user", "name": "Other Manager", "category": "Other"}
+}
+
+# Login required decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_email' not in session:
+            flash('Please log in to access this page', 'danger')
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# API login required decorator - returns JSON instead of redirecting
+def api_login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_email' not in session:
+            return jsonify({'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Category access control - filter feedback data based on user role and category
+def filter_by_user_access(df):
+    """Filter feedback data based on user role and category"""
+    if 'user_email' not in session:
+        return df  # Return all data if not logged in (this shouldn't happen due to @login_required)
+    
+    user_email = session['user_email']
+    user = USERS.get(user_email)
+    
+    if user['role'] == 'super_user':
+        return df  # Super users can see all data
+    
+    # Category users can only see feedback for their category
+    if user['role'] == 'category_user' and user['category']:
+        # Check which column name exists in the dataframe
+        if 'Category' in df.columns:
+            category_column = 'Category'
+        elif 'Main Category' in df.columns:
+            category_column = 'Main Category'
+        else:
+            # If neither column exists, return empty dataframe
+            logging.error("Neither 'Category' nor 'Main Category' column found in dataframe")
+            return pd.DataFrame()
+        
+        return df[df[category_column] == user['category']].copy()
+    
+    return pd.DataFrame()  # Return empty dataframe if no matching access
 
 # Helper function to load data from Excel file
 def load_data():
     """Load data from Excel file"""
     try:
-        logging.info(f"Loading data from {DATA_FILE}")
+        # Load data from the specified Excel file
+        logging.info(f"Attempting to load data from {DATA_FILE}")
         df = pd.read_excel(DATA_FILE)
         logging.info(f"Successfully loaded data with {len(df)} records")
+        
+        # For debugging: log column names to help diagnose category filtering issues
+        logging.info(f"DataFrame columns: {df.columns.tolist()}")
         
         # Add Date Submitted field if not present (mock data for demonstration)
         if 'Date Submitted' not in df.columns:
@@ -54,10 +123,27 @@ def load_data():
                                                     minutes=random.randint(0, 59)) 
                                   for _ in range(len(df))]
         
+        # For demonstration purposes - if neither Category nor Main Category exists, create one
+        if 'Category' not in df.columns and 'Main Category' not in df.columns:
+            logging.warning("Neither 'Category' nor 'Main Category' column found - adding Category column")
+            sample_categories = ['Travel', 'Food & Beverage', 'Merchandise', 'Tickets', 'Game Experience']
+            df['Category'] = [random.choice(sample_categories) for _ in range(len(df))]
+        
         return df
     except Exception as e:
         logging.error(f"Error loading data: {str(e)}")
-        raise Exception(f"Failed to load data: {str(e)}")
+        # For debugging, return a small mock dataframe instead of raising an exception
+        logging.warning("Returning mock data due to load failure")
+        mock_df = pd.DataFrame({
+            'ID': range(1, 5),
+            'First Name': ['John', 'Jane', 'Bob', 'Alice'],
+            'Last Name': ['Smith', 'Doe', 'Johnson', 'Williams'],
+            'Email': ['john@example.com', 'jane@example.com', 'bob@example.com', 'alice@example.com'],
+            'Category': ['Travel', 'Food & Beverage', 'Merchandise', 'Tickets'],
+            'Feedback': ['Great service!', 'Food was cold', 'Nice merchandise', 'Ticket purchase was easy'],
+            'Date Submitted': [datetime.now() - timedelta(days=i) for i in range(4)]
+        })
+        return mock_df
 
 # Helper function to calculate date range based on filter
 def get_date_range(date_range, start_date=None, end_date=None):
@@ -96,14 +182,63 @@ def open_browser():
 
 @app.route('/')
 def index():
-    return render_template('dashboard.html')
+    if 'user_email' in session:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    # Check if user is already logged in
+    if 'user_email' in session:
+        return redirect(url_for('dashboard'))
+    
+    # Handle login form submission
+    if request.method == 'POST':
+        email = request.form.get('email', '').lower()
+        password = request.form.get('password', '')
+        
+        # Check if email exists in users dictionary
+        if email in USERS and USERS[email]['password'] == password:
+            # Store user info in session
+            session['user_email'] = email
+            session['user_name'] = USERS[email]['name']
+            session['user_role'] = USERS[email]['role']
+            session['user_category'] = USERS[email]['category']
+            
+            # Redirect to dashboard or requested next page
+            next_page = request.args.get('next')
+            if next_page and next_page.startswith('/'):
+                return redirect(next_page)
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid email or password', 'danger')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    # Clear session data
+    session.clear()
+    flash('You have been logged out', 'success')
+    return redirect(url_for('login'))
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
     logging.info("Dashboard page requested")
-    return render_template('dashboard.html')
+    # Get user info
+    user_info = {
+        'name': session.get('user_name'),
+        'role': session.get('user_role'),
+        'category': session.get('user_category'),
+        'email': session.get('user_email')
+    }
+    
+    return render_template('dashboard.html', user=user_info)
 
-@app.route('/get_dashboard_data')
+@app.route('/api/dashboard-data')
+@app.route('/get_dashboard_data')  # Adding route alias for frontend compatibility
+@api_login_required
 def get_dashboard_data():
     """Get data needed for the main dashboard"""
     try:
@@ -115,6 +250,9 @@ def get_dashboard_data():
         
         # Load data
         df = load_data()
+        
+        # Apply user-based access filtering
+        df = filter_by_user_access(df)
         
         # Apply filters
         if category != 'all':
@@ -215,18 +353,26 @@ def get_dashboard_data():
             }
         }
         
+        # Apply user-based filtering
+        df = filter_by_user_access(df)
+        
         return jsonify(response)
     
     except Exception as e:
         logging.error(f"Error getting dashboard data: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/get_feedback_summary')
+@app.route('/api/feedback-summary')
+@app.route('/get_feedback_summary')  # Adding route alias for frontend compatibility
+@api_login_required
 def get_feedback_summary():
     """Get summary metrics for feedback"""
     try:
         # Load data
         df = load_data()
+        
+        # Apply user-based access filtering
+        df = filter_by_user_access(df)
         
         # Calculate metrics
         total_feedback = len(df)
@@ -306,12 +452,17 @@ def get_feedback_summary():
         logging.error(f"Error getting feedback summary: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/get_categories')
+@app.route('/api/categories')
+@app.route('/get_categories')  # Adding route alias for frontend compatibility
+@api_login_required
 def get_categories():
     """Get a list of all categories"""
     try:
         # Load data
         df = load_data()
+        
+        # Apply user-based access filtering
+        df = filter_by_user_access(df)
         
         # Get unique categories
         categories = df['Main Category'].unique().tolist() if 'Main Category' in df.columns else []
@@ -322,7 +473,9 @@ def get_categories():
         logging.error(f"Error getting categories: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/get_recent_feedback')
+@app.route('/api/recent-feedback')
+@app.route('/get_recent_feedback')  # Adding route alias for frontend compatibility
+@api_login_required
 def get_recent_feedback():
     """Get list of recent feedback with pagination"""
     try:
@@ -335,6 +488,9 @@ def get_recent_feedback():
         
         # Load data
         df = load_data()
+        
+        # Apply user-based access filtering
+        df = filter_by_user_access(df)
         
         # Add ID column if not present
         if 'ID' not in df.columns:
@@ -401,12 +557,17 @@ def get_recent_feedback():
         logging.error(f"Error getting recent feedback: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/get_feedback_details/<int:feedback_id>')
+@app.route('/api/feedback/<int:feedback_id>')
+@app.route('/get_feedback_details/<int:feedback_id>')  # Adding route alias for frontend compatibility
+@api_login_required
 def get_feedback_details(feedback_id):
     """Get details for a specific feedback item"""
     try:
         # Load data
         df = load_data()
+        
+        # Apply user-based access filtering
+        df = filter_by_user_access(df)
         
         # Since our dataset doesn't have an ID column, we'll use the index
         # Add an ID column based on the index
@@ -437,26 +598,57 @@ def get_feedback_details(feedback_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/feedback_details/<int:feedback_id>')
+@login_required
 def feedback_details_page(feedback_id):
     """Render the feedback details page"""
-    return render_template('feedback_details.html', feedback_id=feedback_id)
+    # Get user info
+    user_info = {
+        'name': session.get('user_name'),
+        'role': session.get('user_role'),
+        'category': session.get('user_category'),
+        'email': session.get('user_email')
+    }
+    
+    return render_template('feedback_details.html', feedback_id=feedback_id, user=user_info)
 
-@app.route('/recent_feedback')
+@app.route('/recent-feedback')
+@login_required
 def recent_feedback_page():
     """Render the recent feedback page"""
-    return render_template('recent-feedback.html')
+    # Get user info
+    user_info = {
+        'name': session.get('user_name'),
+        'role': session.get('user_role'),
+        'category': session.get('user_category'),
+        'email': session.get('user_email')
+    }
+    
+    return render_template('recent-feedback.html', user=user_info)
 
-@app.route('/edit_feedback/<feedback_id>')
+@app.route('/edit-feedback/<int:feedback_id>')
+@login_required
 def edit_feedback_page(feedback_id):
     """Render the edit feedback page"""
-    return render_template('edit-feedback.html', feedback_id=feedback_id)
+    # Get user info
+    user_info = {
+        'name': session.get('user_name'),
+        'role': session.get('user_role'),
+        'category': session.get('user_category'),
+        'email': session.get('user_email')
+    }
+    
+    return render_template('edit-feedback.html', feedback_id=feedback_id, user=user_info)
 
-@app.route('/get_feedback_details/<feedback_id>')
+@app.route('/api/feedback/<int:feedback_id>/edit')
+@login_required
 def get_feedback_details_for_edit(feedback_id):
     """Get details for a specific feedback item for editing"""
     try:
         # Load data
         df = load_data()
+        
+        # Apply user-based access filtering
+        df = filter_by_user_access(df)
         
         # Find the feedback item by ID
         if 'ID' not in df.columns:
@@ -489,7 +681,9 @@ def get_feedback_details_for_edit(feedback_id):
         logging.error(f"Error getting feedback details: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/update_feedback', methods=['POST'])
+@app.route('/api/feedback/update', methods=['POST'])
+@app.route('/update_feedback', methods=['POST'])  # Adding route alias for frontend compatibility
+@api_login_required
 def update_feedback():
     """Update feedback data"""
     try:
@@ -508,6 +702,9 @@ def update_feedback():
         # Load data
         df = load_data()
         
+        # Apply user-based access filtering
+        filtered_df = filter_by_user_access(df)
+        
         # Find the feedback item by ID
         if 'ID' not in df.columns:
             df['ID'] = range(1, len(df) + 1)
@@ -516,6 +713,11 @@ def update_feedback():
         feedback_id = int(data['id'])
         index = df[df['ID'] == feedback_id].index
         
+        # Check if the user has access to this feedback item
+        filtered_index = filtered_df[filtered_df['ID'] == feedback_id].index
+        if len(filtered_index) == 0:
+            return jsonify({'success': False, 'message': 'Access denied or feedback not found'}), 403
+            
         if len(index) == 0:
             return jsonify({'success': False, 'message': 'Feedback not found'}), 404
         
@@ -552,7 +754,8 @@ def update_feedback():
         logging.error(f"Error updating feedback: {str(e)}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
-@app.route('/record_email_tracking', methods=['POST'])
+@app.route('/api/email/track', methods=['POST'])
+@login_required
 def record_email_tracking():
     """Record email tracking information"""
     try:
@@ -571,6 +774,9 @@ def record_email_tracking():
         # Load data
         df = load_data()
         
+        # Apply user-based access filtering
+        filtered_df = filter_by_user_access(df)
+        
         # Find the feedback item by ID
         if 'ID' not in df.columns:
             df['ID'] = range(1, len(df) + 1)
@@ -579,6 +785,11 @@ def record_email_tracking():
         feedback_id = int(data['feedback_id'])
         index = df[df['ID'] == feedback_id].index
         
+        # Check if the user has access to this feedback item
+        filtered_index = filtered_df[filtered_df['ID'] == feedback_id].index
+        if len(filtered_index) == 0:
+            return jsonify({'success': False, 'message': 'Access denied or feedback not found'}), 403
+            
         if len(index) == 0:
             return jsonify({'success': False, 'message': 'Feedback not found'}), 404
             

@@ -24,13 +24,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function loadCategories() {
     showLoadingState();
     
-    fetch('/get_categories')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
+    fetchWithAuth('/get_categories')
         .then(categories => {
             updateCategoryDropdown(categories);
             hideLoadingState();
@@ -64,13 +58,7 @@ function updateCategoryDropdown(categories) {
 function loadFeedbackData(feedbackId) {
     showLoadingState();
     
-    fetch(`/get_feedback_details/${feedbackId}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
+    fetchWithAuth(`/get_feedback_details/${feedbackId}`)
         .then(feedback => {
             populateForm(feedback);
             hideLoadingState();
@@ -178,19 +166,16 @@ function setupFormHandler() {
 function submitFormData(data) {
     showLoadingState();
     
-    fetch('/update_feedback', {
+    // Use fetchWithAuth with custom options for POST
+    fetch('/api/feedback/update', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify(data)
     })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        return response.json();
-    })
+    .then(handleApiAuthError) // Use our auth error handler
+    .then(response => response.json())
     .then(result => {
         if (result.success) {
             // Show success message
@@ -198,9 +183,9 @@ function submitFormData(data) {
             if (successAlert) {
                 successAlert.style.display = 'block';
                 
-                // Redirect back to recent feedback page after a delay
+                // Redirect back to recent feedback page after a delay with correct URL path
                 setTimeout(() => {
-                    window.location.href = '/recent_feedback';
+                    window.location.href = '/recent-feedback';
                 }, 2000);
             }
         } else {

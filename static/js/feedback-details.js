@@ -27,13 +27,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function loadFeedbackDetail(feedbackId) {
     showLoadingState();
     
-    fetch(`/get_feedback_details/${feedbackId}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Failed to load feedback details');
-            }
-            return response.json();
-        })
+    fetchWithAuth(`/get_feedback_details/${feedbackId}`)
         .then(data => {
             hideLoadingState();
             populateFeedbackDetails(data);

@@ -334,13 +334,7 @@ function initializeCharts() {
 function loadFeedbackSummary() {
     showLoadingState();
     
-    fetch('/get_feedback_summary')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
+    fetchWithAuth('/get_feedback_summary')
         .then(data => {
             updateFeedbackSummary(data);
             hideLoadingState();
@@ -441,13 +435,7 @@ function updateResolutionStatusKPIs(resolutionData) {
 
 // Load categories from API
 function loadCategories() {
-    fetch('/get_categories')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
+    fetchWithAuth('/get_categories')
         .then(categories => {
             updateCategoryDropdown(categories);
         })
@@ -516,13 +504,7 @@ function loadDashboardData() {
     }
 
     // Fetch dashboard data
-    fetch(`/get_dashboard_data?${params.toString()}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
+    fetchWithAuth(`/get_dashboard_data?${params.toString()}`)
         .then(data => {
             updateDashboard(data);
             hideLoadingState();

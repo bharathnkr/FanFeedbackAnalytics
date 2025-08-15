@@ -120,13 +120,7 @@ function setupEventHandlers() {
 
 // Load categories from API
 function loadCategories() {
-    fetch('/get_categories')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
+    fetchWithAuth('/get_categories')
         .then(categories => {
             updateCategoryDropdown(categories);
         })
@@ -196,13 +190,7 @@ function loadRecentFeedback(page) {
     }
     
     // Fetch recent feedback data
-    fetch(`/get_recent_feedback?${params.toString()}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
+    fetchWithAuth(`/get_recent_feedback?${params.toString()}`)
         .then(data => {
             updateFeedbackTable(data.feedback);
             updatePagination(data.pagination);
@@ -353,8 +341,8 @@ function updateFeedbackTable(feedback) {
             editBtn.setAttribute('title', 'Edit Feedback');
             editBtn.setAttribute('data-feedback-id', item.ID);
             editBtn.addEventListener('click', function() {
-                // You can add edit functionality here or redirect to an edit page
-                window.location.href = `/edit_feedback/${this.getAttribute('data-feedback-id')}`;
+                // Redirect to edit page with correct URL format (hyphen, not underscore)
+                window.location.href = `/edit-feedback/${this.getAttribute('data-feedback-id')}`;
             });
             actionsCell.appendChild(editBtn);
             
@@ -368,6 +356,14 @@ function updateFeedbackTable(feedback) {
 // Update pagination controls
 function updatePagination(pagination) {
     const paginationElement = document.getElementById('feedback-pagination');
+    const paginationInfoElement = document.getElementById('pagination-info');
+    
+    // Update pagination info text
+    if (paginationInfoElement && pagination) {
+        const startRecord = ((pagination.page - 1) * pagination.page_size) + 1;
+        const endRecord = Math.min(pagination.page * pagination.page_size, pagination.total_records);
+        paginationInfoElement.textContent = `Showing ${startRecord} to ${endRecord} of ${pagination.total_records} entries`;
+    }
     
     if (paginationElement && pagination) {
         // Clear existing pagination
