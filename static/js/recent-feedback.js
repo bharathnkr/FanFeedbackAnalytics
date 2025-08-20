@@ -78,44 +78,7 @@ function setupEventHandlers() {
         });
     }
     
-    // Date range filter
-    const dateRangeFilter = document.getElementById('date-range-filter');
-    const customDateRange = document.getElementById('custom-date-range');
-    const dateFromInput = document.getElementById('date-from');
-    const dateToInput = document.getElementById('date-to');
-    
-    if (dateRangeFilter) {
-        dateRangeFilter.addEventListener('change', function() {
-            if (customDateRange) {
-                customDateRange.style.display = this.value === 'custom' ? 'block' : 'none';
-                
-                if (this.value === 'custom') {
-                    const today = new Date();
-                    const thirtyDaysAgo = new Date();
-                    thirtyDaysAgo.setDate(today.getDate() - 30);
-                    
-                    if (dateFromInput) {
-                        dateFromInput.value = thirtyDaysAgo.toISOString().split('T')[0];
-                        dateFromInput.max = today.toISOString().split('T')[0];
-                    }
-                    if (dateToInput) {
-                        dateToInput.value = today.toISOString().split('T')[0];
-                        dateToInput.max = today.toISOString().split('T')[0];
-                    }
-                }
-            }
-        });
-    }
-    
-    // Setup feedback detail modal
-    const feedbackModal = document.getElementById('feedback-detail-modal');
-    if (feedbackModal) {
-        feedbackModal.addEventListener('show.bs.modal', function(event) {
-            const button = event.relatedTarget;
-            const feedbackId = button.getAttribute('data-feedback-id');
-            loadFeedbackDetail(feedbackId);
-        });
-    }
+    // No date filter initialization needed as we're handling sorting in the backend
 }
 
 // Load categories from API
@@ -158,36 +121,18 @@ function updateCategoryDropdown(categories) {
 function loadRecentFeedback(page) {
     showLoadingState();
     
-    // Get filter values
+    // Get category filter value
     const categoryFilter = document.getElementById('category-filter');
-    const dateRangeFilter = document.getElementById('date-range-filter');
-    const dateFromInput = document.getElementById('date-from');
-    const dateToInput = document.getElementById('date-to');
-    
     const category = categoryFilter ? categoryFilter.value : 'all';
-    const dateRange = dateRangeFilter ? dateRangeFilter.value : 'last30';
-    const startDate = dateFromInput ? dateFromInput.value : null;
-    const endDate = dateToInput ? dateToInput.value : null;
     
-    // Save filter values to session storage
+    // Save filter value to session storage
     if (categoryFilter) sessionStorage.setItem('feedback_category_filter', category);
-    if (dateRangeFilter) sessionStorage.setItem('feedback_date_range_filter', dateRange);
-    if (dateRange === 'custom') {
-        if (dateFromInput) sessionStorage.setItem('feedback_date_from', startDate);
-        if (dateToInput) sessionStorage.setItem('feedback_date_to', endDate);
-    }
     
-    // Build query parameters
+    // Build query parameters - only using category and page
     const params = new URLSearchParams({
         category: category,
-        date_range: dateRange,
         page: page
     });
-    
-    if (dateRange === 'custom' && startDate && endDate) {
-        params.append('start_date', startDate);
-        params.append('end_date', endDate);
-    }
     
     // Fetch recent feedback data
     fetchWithAuth(`/get_recent_feedback?${params.toString()}`)
@@ -225,11 +170,6 @@ function updateFeedbackTable(feedback) {
         feedback.forEach(item => {
             const row = document.createElement('tr');
             
-            // ID column
-            const idCell = document.createElement('td');
-            idCell.textContent = item.ID || '-';
-            row.appendChild(idCell);
-            
             // First Name column
             const firstNameCell = document.createElement('td');
             firstNameCell.textContent = item['First Name'] || '-';
@@ -239,6 +179,12 @@ function updateFeedbackTable(feedback) {
             const lastNameCell = document.createElement('td');
             lastNameCell.textContent = item['Last Name'] || '-';
             row.appendChild(lastNameCell);
+            
+            // Date column
+            const dateCell = document.createElement('td');
+            const dateValue = item['Date Submitted'] || item['created_date'] || '-';
+            dateCell.textContent = dateValue !== '-' ? new Date(dateValue).toLocaleDateString() : '-';
+            row.appendChild(dateCell);
             
             // Category column
             const categoryCell = document.createElement('td');
