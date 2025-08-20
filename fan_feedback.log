@@ -1,22 +1,3 @@
-2025-08-20 18:18:16,529 - INFO - Starting server on 0.0.0.0:5000 with debug=True
-2025-08-20 18:18:16,620 - WARNING -  * Debugger is active!
-2025-08-20 18:18:16,627 - INFO -  * Debugger PIN: 150-922-726
-2025-08-20 18:18:20,409 - INFO - 127.0.0.1 - - [20/Aug/2025 18:18:20] "GET /recent-feedback HTTP/1.1" 200 -
-2025-08-20 18:18:20,447 - INFO - 127.0.0.1 - - [20/Aug/2025 18:18:20] "[33mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 404 -
-2025-08-20 18:18:20,785 - INFO - 127.0.0.1 - - [20/Aug/2025 18:18:20] "[36mGET /static/js/recent-feedback.js HTTP/1.1[0m" 304 -
-2025-08-20 18:18:20,799 - INFO - 127.0.0.1 - - [20/Aug/2025 18:18:20] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
-2025-08-20 18:18:20,812 - INFO - 127.0.0.1 - - [20/Aug/2025 18:18:20] "[36mGET /static/js/auth-handler.js HTTP/1.1[0m" 304 -
-2025-08-20 18:18:20,823 - INFO - Attempting to use credentials file: C:\Users\breddy\AppData\Roaming\gcloud\application_default_credentials.json
-2025-08-20 18:18:20,825 - INFO - Attempting to use credentials file: C:\Users\breddy\AppData\Roaming\gcloud\application_default_credentials.json
-2025-08-20 18:18:20,825 - ERROR - Error using service account credentials: Service account info was not in the expected format, missing fields token_uri, client_email.
-2025-08-20 18:18:20,826 - INFO - Trying application default credentials...
-2025-08-20 18:18:20,826 - ERROR - Error using service account credentials: Service account info was not in the expected format, missing fields token_uri, client_email.
-2025-08-20 18:18:20,827 - INFO - Trying application default credentials...
-2025-08-20 18:18:22,186 - INFO - Successfully initialized BigQuery client with application default credentials for project mets-p-cc076-business-analytic
-2025-08-20 18:18:22,187 - INFO - Attempting to load data from BigQuery table: mets-p-cc076-business-analytic.wheelhouse_views.fanFeedback_form_responses with ordering by created_date DESC
-2025-08-20 18:18:22,194 - INFO - Successfully initialized BigQuery client with application default credentials for project mets-p-cc076-business-analytic
-2025-08-20 18:18:22,194 - INFO - Attempting to load data from BigQuery table: mets-p-cc076-business-analytic.wheelhouse_views.fanFeedback_form_responses with ordering by created_date DESC
-2025-08-20 18:18:24,052 - INFO - Successfully loaded data with 3 records from BigQuery
-2025-08-20 18:18:24,053 - INFO - Successfully loaded data with 3 records from BigQuery
-2025-08-20 18:18:24,065 - INFO - 127.0.0.1 - - [20/Aug/2025 18:18:24] "GET /get_categories HTTP/1.1" 200 -
-2025-08-20 18:18:24,076 - INFO - 127.0.0.1 - - [20/Aug/2025 18:18:24] "GET /get_recent_feedback?category=all&page=1 HTTP/1.1" 200 -
+2025-08-20 18:25:45,432 - INFO - Starting server on 0.0.0.0:5000 with debug=True
+2025-08-20 18:25:45,525 - WARNING -  * Debugger is active!
+2025-08-20 18:25:45,531 - INFO -  * Debugger PIN: 150-922-726

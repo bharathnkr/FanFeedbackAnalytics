@@ -7,8 +7,6 @@ import pandas as pd
 from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for, flash, g
 from flask_cors import CORS
 from functools import wraps
-from google.cloud import bigquery
-from google.oauth2 import service_account
 
 # Configure logging
 logging.basicConfig(
@@ -38,73 +36,9 @@ app.config['SESSION_TYPE'] = 'filesystem'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # Session expires after 8 hours
 
 # Data Configuration
-# BigQuery Configuration
-PROJECT_ID = 'mets-p-cc076-business-analytic'
-# Fix path format for Windows - use raw string and backslashes
-CREDENTIALS_PATH = r'C:\Users\breddy\AppData\Roaming\gcloud\application_default_credentials.json'
-DATASET_ID = 'wheelhouse_views'
-TABLE_ID = 'fanFeedback_form_responses'
-
-# Flag to control whether to use BigQuery or Excel
-USE_BIGQUERY = True  # Set to False to use Excel exclusively
-
-# Keep Excel file path for fallback/reference
+# Using the specified file path
 DATA_FILE = r"C:\Users\BReddy\Downloads\Microsoft.RemoteDesktop_8wekyb3d8bbwe!App\TemporaryRDStorageFiles-{86740C75-1613-445F-9C27-874E93435744}\2025_06_03 Fan Feedback Sample Dataset.xlsx"
-
-# Initialize BigQuery client
-def get_bigquery_client():
-    """Initialize and return a BigQuery client using service account credentials with fallback to application default"""
-    try:
-        # First try with service account credentials file
-        if os.path.exists(CREDENTIALS_PATH):
-            logging.info(f"Attempting to use credentials file: {CREDENTIALS_PATH}")
-            try:
-                credentials = service_account.Credentials.from_service_account_file(
-                    CREDENTIALS_PATH,
-                    scopes=["https://www.googleapis.com/auth/bigquery"],
-                )
-                client = bigquery.Client(credentials=credentials, project=PROJECT_ID)
-                logging.info(f"Successfully initialized BigQuery client with service account for project {PROJECT_ID}")
-                return client
-            except Exception as cred_error:
-                logging.error(f"Error using service account credentials: {str(cred_error)}")
-                # Continue to fallback method
-        
-        # Fallback to application default credentials
-        logging.info("Trying application default credentials...")
-        try:
-            client = bigquery.Client(project=PROJECT_ID)
-            logging.info(f"Successfully initialized BigQuery client with application default credentials for project {PROJECT_ID}")
-            return client
-        except Exception as adc_error:
-            logging.error(f"Error using application default credentials: {str(adc_error)}")
-            
-        # If we get here, both authentication methods failed
-        logging.error("All authentication methods failed")
-        return None
-    except Exception as e:
-        logging.error(f"Unexpected error initializing BigQuery client: {str(e)}")
-        return None
-        
-def get_table_schema():
-    """Get the schema of the BigQuery table"""
-    try:
-        client = get_bigquery_client()
-        if not client:
-            logging.error("Failed to initialize BigQuery client")
-            return None
-            
-        table_ref = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
-        table = client.get_table(table_ref)
-        
-        # Log the schema for debugging
-        schema_fields = [field.name for field in table.schema]
-        logging.info(f"Table schema fields: {schema_fields}")
-        
-        return table.schema
-    except Exception as e:
-        logging.error(f"Error getting table schema: {str(e)}")
-        return None
+# No fallback path needed since we have the exact file path
 
 # User authentication configuration
 # For demo purposes, we'll use a simple dictionary to store users
@@ -168,189 +102,48 @@ def filter_by_user_access(df):
     
     return pd.DataFrame()  # Return empty dataframe if no matching access
 
-# Cache for loaded data to avoid repeated expensive operations
-_data_cache = None
-_last_cache_time = None
-_CACHE_EXPIRY_SECONDS = 60  # Cache expires after 1 minute
-
-# Helper function to load data from BigQuery table or Excel fallback
-def load_data(force_refresh=False):
-    """Load data from BigQuery table with fallback to Excel, with caching"""
-    global _data_cache, _last_cache_time
-    
-    # Check if we can use cached data
-    current_time = datetime.now()
-    if not force_refresh and _data_cache is not None and _last_cache_time is not None:
-        # Use cache if it's less than the expiry time
-        if (current_time - _last_cache_time).total_seconds() < _CACHE_EXPIRY_SECONDS:
-            return _data_cache.copy()  # Return a copy to prevent modification of cache
-    
-    # Need to load fresh data
-    if USE_BIGQUERY:
-        try:
-            # Initialize BigQuery client
-            client = get_bigquery_client()
-            if not client:
-                logging.error("Failed to initialize BigQuery client")
-                raise Exception("Failed to initialize BigQuery client")
-                
-            # Construct the query to fetch data from the BigQuery table
-            table_ref = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
-            # Use created_date in the query, order by DESC, and apply LIMIT 1000
-            query = f"SELECT * FROM `{table_ref}` ORDER BY created_date DESC LIMIT 1000"
-            logging.info(f"Attempting to load data from BigQuery table: {table_ref} with ordering by created_date DESC")
-            
-            # Execute the query and convert results to a DataFrame
-            df = client.query(query).to_dataframe()
-            logging.info(f"Successfully loaded data with {len(df)} records from BigQuery")
-            
-            # Handle column name standardization - only map essential columns
-            column_mapping = {
-                'contact_user': 'Contact User',
-                'status': 'Status',
-                'category': 'Main Category',
-                'sub_category': 'Sub Category',
-                'feedback': 'Feedback',
-                'customer_name': 'Customer Name',
-                'created_date': 'Date Submitted'
-            }
-            
-            # Rename columns based on the mapping - more efficient approach
-            rename_dict = {k: v for k, v in column_mapping.items() if k in df.columns and v not in df.columns}
-            if rename_dict:
-                df.rename(columns=rename_dict, inplace=True)
-            
-            # Process the DataFrame to ensure required columns exist
-            df = ensure_required_columns(df)
-            
-            # Update cache
-            _data_cache = df
-            _last_cache_time = current_time
-            
-            return df
-            
-        except Exception as e:
-            logging.error(f"Error loading data from BigQuery: {str(e)}")
-            # Fall back to Excel
-            df = load_excel_data()
-            
-            # Update cache
-            _data_cache = df
-            _last_cache_time = current_time
-            
-            return df
-    else:
-        # BigQuery is disabled, use Excel directly
-        df = load_excel_data()
-        
-        # Update cache
-        _data_cache = df
-        _last_cache_time = current_time
-        
-        return df
-
-# Helper function to load data from Excel
-def load_excel_data():
+# Helper function to load data from Excel file
+def load_data():
     """Load data from Excel file"""
     try:
-        logging.warning(f"Attempting to fall back to Excel file: {DATA_FILE}")
-        # Check if Excel file exists
-        if not os.path.exists(DATA_FILE):
-            logging.error(f"Excel file not found: {DATA_FILE}")
-            return create_mock_data()
-            
-        # Load Excel file
+        # Load data from the specified Excel file
+        logging.info(f"Attempting to load data from {DATA_FILE}")
         df = pd.read_excel(DATA_FILE)
-        logging.info(f"Successfully loaded fallback data with {len(df)} records from Excel")
+        logging.info(f"Successfully loaded data with {len(df)} records")
         
-        # Process the DataFrame to ensure required columns exist
-        df = ensure_required_columns(df)
+        # For debugging: log column names to help diagnose category filtering issues
+        logging.info(f"DataFrame columns: {df.columns.tolist()}")
+        
+        # Add Date Submitted field if not present (mock data for demonstration)
+        if 'Date Submitted' not in df.columns:
+            # Create mock submission dates: random dates within the last 30 days
+            today = datetime.now()
+            df['Date Submitted'] = [today - timedelta(days=random.randint(0, 30), 
+                                                    hours=random.randint(0, 23), 
+                                                    minutes=random.randint(0, 59)) 
+                                  for _ in range(len(df))]
+        
+        # For demonstration purposes - if neither Category nor Main Category exists, create one
+        if 'Category' not in df.columns and 'Main Category' not in df.columns:
+            logging.warning("Neither 'Category' nor 'Main Category' column found - adding Category column")
+            sample_categories = ['Travel', 'Food & Beverage', 'Merchandise', 'Tickets', 'Game Experience']
+            df['Category'] = [random.choice(sample_categories) for _ in range(len(df))]
+        
         return df
     except Exception as e:
-        logging.error(f"Error loading Excel data: {str(e)}")
-        return create_mock_data()
-
-# Helper function to create mock data when all else fails
-def create_mock_data():
-    """Create mock data when no data source is available"""
-    logging.warning("Creating mock data as fallback")
-    # Create a small dataset with required columns
-    data = {
-        'ID': list(range(1, 11)),
-        'First Name': ['John', 'Jane', 'Bob', 'Alice', 'Charlie', 'Diana', 'Edward', 'Fiona', 'George', 'Hannah'],
-        'Last Name': ['Smith', 'Doe', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez'],
-        'Email': ['john@example.com', 'jane@example.com', 'bob@example.com', 'alice@example.com', 'charlie@example.com',
-                 'diana@example.com', 'edward@example.com', 'fiona@example.com', 'george@example.com', 'hannah@example.com'],
-        'Main Category': ['Travel', 'Food & Beverage', 'Merchandise', 'Tickets', 'Game Experience',
-                         'Travel', 'Food & Beverage', 'Merchandise', 'Tickets', 'Game Experience'],
-        'Sub Category': ['Parking', 'Concessions', 'Apparel', 'Season Tickets', 'Seating',
-                        'Transportation', 'Food Quality', 'Souvenirs', 'Single Game', 'Staff'],
-        'Feedback': ['Parking was difficult to find', 'Food was cold', 'T-shirt quality was poor', 'Easy to purchase',
-                    'Seats were uncomfortable', 'Shuttle service was excellent', 'Great hot dogs', 'Overpriced items',
-                    'Ticket transfer was confusing', 'Staff was very helpful'],
-        'Date Submitted': [(datetime.now() - timedelta(days=i)) for i in range(10)],
-        'Contact User': ['Yes', 'No', 'Yes', 'No', 'Yes', 'No', 'Yes', 'No', 'Yes', 'No'],
-        'Status': ['Not Started', '', 'In Progress', '', 'Completed', '', 'Not Started', '', 'In Progress', ''],
-    }
-    df = pd.DataFrame(data)
-    logging.info("Successfully created mock data with 10 records")
-    return df
-
-# Helper function to ensure required columns exist in the DataFrame
-def ensure_required_columns(df):
-    """Ensure all required columns exist in the DataFrame"""
-    # Only add missing columns that are actually needed for the application
-    # Skip random data generation for performance
-    
-    # Create a list of columns to check and add if missing
-    missing_columns = {}
-    
-    # Ensure ID column exists (critical for record identification)
-    if 'ID' not in df.columns:
-        missing_columns['ID'] = range(1, len(df) + 1)
-    
-    # Ensure Main Category exists (needed for filtering)
-    if 'Main Category' not in df.columns:
-        if 'category' in df.columns:
-            missing_columns['Main Category'] = df['category']
-        elif 'Category' in df.columns:
-            missing_columns['Main Category'] = df['Category']
-        else:
-            missing_columns['Main Category'] = ''
-    
-    # Handle customer name fields - only if Customer Name exists
-    if 'Customer Name' in df.columns and 'First Name' not in df.columns and 'Last Name' not in df.columns:
-        try:
-            # Split names only once
-            name_parts = df['Customer Name'].str.split(' ', n=1, expand=True)
-            missing_columns['First Name'] = name_parts[0]
-            # Handle last name if it exists
-            if 1 in name_parts.columns:
-                missing_columns['Last Name'] = name_parts[1].fillna('')
-            else:
-                missing_columns['Last Name'] = ''
-        except Exception as e:
-            logging.warning(f"Error splitting Customer Name: {str(e)}")
-            missing_columns['First Name'] = df['Customer Name']
-            missing_columns['Last Name'] = ''
-    
-    # Ensure date column exists with a standard name
-    date_columns = ['Date Submitted', 'created_date', 'Date']
-    if not any(col in df.columns for col in date_columns):
-        # Add current date if no date column exists
-        missing_columns['Date Submitted'] = pd.Timestamp.now()
-    
-    # Add minimal required columns with empty values
-    for col in ['Contact User', 'Status', 'Sub Category', 'First Name', 'Last Name']:
-        if col not in df.columns and col not in missing_columns:
-            missing_columns[col] = ''
-    
-    # Add all missing columns at once (more efficient)
-    if missing_columns:
-        for col, value in missing_columns.items():
-            df[col] = value
-    
-    return df
+        logging.error(f"Error loading data: {str(e)}")
+        # For debugging, return a small mock dataframe instead of raising an exception
+        logging.warning("Returning mock data due to load failure")
+        mock_df = pd.DataFrame({
+            'ID': range(1, 5),
+            'First Name': ['John', 'Jane', 'Bob', 'Alice'],
+            'Last Name': ['Smith', 'Doe', 'Johnson', 'Williams'],
+            'Email': ['john@example.com', 'jane@example.com', 'bob@example.com', 'alice@example.com'],
+            'Category': ['Travel', 'Food & Beverage', 'Merchandise', 'Tickets'],
+            'Feedback': ['Great service!', 'Food was cold', 'Nice merchandise', 'Ticket purchase was easy'],
+            'Date Submitted': [datetime.now() - timedelta(days=i) for i in range(4)]
+        })
+        return mock_df
 
 # Helper function to calculate date range based on filter
 def get_date_range(date_range, start_date=None, end_date=None):
@@ -688,46 +481,52 @@ def get_recent_feedback():
     try:
         # Get pagination parameters
         page = int(request.args.get('page', 1))
-        page_size = int(request.args.get('page_size', 50))
-        category = request.args.get('category', 'all')
+        page_size = int(request.args.get('page_size', 50))  # Changed default from 25 to 50
         
-        # Load data - this already handles column standardization and sorting by created_date DESC
+        # Calculate offset
+        offset = (page - 1) * page_size
+        
+        # Load data
         df = load_data()
         
         # Apply user-based access filtering
         df = filter_by_user_access(df)
         
-        # Identify date column for later use
-        date_col = next((col for col in ['Date Submitted', 'created_date', 'Date'] 
-                       if col in df.columns), None)
+        # Add ID column if not present
+        if 'ID' not in df.columns:
+            df['ID'] = range(1, len(df) + 1)
         
-        # Apply category filter if specified
-        if category and category.lower() != 'all' and 'Main Category' in df.columns:
-            df = df[df['Main Category'] == category]
+        # Add Contact User column if not present
+        if 'Contact User' not in df.columns:
+            import random
+            # Generate random Yes/No values for Contact User
+            df['Contact User'] = [random.choice(['Yes', 'No']) for _ in range(len(df))]
         
-        # Calculate total records and pages after filtering but before pagination
+        # Add Status column if not present - only relevant when Contact User is Yes
+        if 'Status' not in df.columns:
+            # Generate random statuses for demonstration
+            statuses = ['Not Started', 'In Progress', 'Completed']
+            import random
+            # Only assign status when Contact User is Yes, otherwise leave empty
+            df['Status'] = [random.choice(statuses) if df.loc[i, 'Contact User'] == 'Yes' else '' 
+                           for i in range(len(df))]
+        
+        # Sort by date if available
+        if 'Date' in df.columns:
+            df = df.sort_values(by='Date', ascending=False)
+        
+        # Calculate total records and pages
         total_records = len(df)
-        total_pages = max(1, (total_records + page_size - 1) // page_size)
+        total_pages = (total_records + page_size - 1) // page_size
         
-        # Ensure page is within valid range
-        page = min(max(1, page), total_pages)
+        # Get paginated data
+        paginated_df = df.iloc[offset:offset+page_size]
         
-        # Calculate offset
-        offset = (page - 1) * page_size
-        
-        # Get paginated data - create a copy to avoid SettingWithCopyWarning
-        paginated_df = df.iloc[offset:offset+page_size].copy() if not df.empty else pd.DataFrame()
-        
-        # Ensure minimal required columns exist with default values
-        # Only add columns that are actually needed
-        required_columns = ['First Name', 'Last Name', 'Main Category', 'Sub Category', 'Status']
+        # Ensure all required columns are present
+        required_columns = ['ID', 'First Name', 'Last Name', 'Main Category', 'Sub Category', 'Status']
         for col in required_columns:
             if col not in paginated_df.columns:
                 paginated_df[col] = '-'
-        
-        # Make sure date column exists
-        if date_col and date_col not in paginated_df.columns:
-            paginated_df[date_col] = None
         
         # Replace NaN values with None for JSON serialization
         paginated_df = paginated_df.where(pd.notna(paginated_df), None)
@@ -735,7 +534,7 @@ def get_recent_feedback():
         # Convert to list of dictionaries
         feedback_list = paginated_df.to_dict('records')
         
-        # Convert datetime objects to strings for JSON serialization
+        # Convert any datetime objects to strings for JSON serialization
         for item in feedback_list:
             for key, value in item.items():
                 if isinstance(value, pd.Timestamp):
@@ -942,52 +741,14 @@ def update_feedback():
         df.loc[index, 'Last Updated By'] = data['updated_by']
         df.loc[index, 'Last Updated Time'] = data['updated_time']
         
-        # Save the updated data to BigQuery
+        # Save the updated data back to Excel
         try:
-            # Initialize BigQuery client
-            client = get_bigquery_client()
-            if not client:
-                raise Exception("Failed to initialize BigQuery client")
-                
-            # Get the table ID
-            table_ref = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
-            
-            # Prepare the update data
-            update_data = {
-                'Main Category': data['category'],
-                'Sub Category': data['sub_category'],
-                'Contact User': data['contact_user'],
-                'Status': data['status'],
-                'Sentiment': data['sentiment'],
-                'Last Updated By': data['updated_by'],
-                'Last Updated Time': data['updated_time']
-            }
-            
-            # Construct the SQL UPDATE statement
-            update_clauses = [f"`{key}` = '{value}'" for key, value in update_data.items()]
-            update_sql = f"UPDATE `{table_ref}` SET {', '.join(update_clauses)} WHERE ID = {feedback_id}"
-            
-            # Execute the update query
-            query_job = client.query(update_sql)
-            query_job.result()  # Wait for the query to complete
-            
-            # Also update the local DataFrame to keep it in sync
-            for key, value in update_data.items():
-                df.loc[index, key] = value
-                
-            logging.info(f"Successfully updated feedback ID {feedback_id} in BigQuery")
+            df.to_excel(DATA_FILE, index=False)
+            logging.info(f"Successfully updated feedback ID {feedback_id}")
             return jsonify({'success': True, 'message': 'Feedback updated successfully'})
         except Exception as e:
-            logging.error(f"Error updating data in BigQuery: {str(e)}")
-            
-            # Fallback to Excel if BigQuery update fails
-            try:
-                df.to_excel(DATA_FILE, index=False)
-                logging.info(f"Successfully updated feedback ID {feedback_id} in Excel (BigQuery update failed)")
-                return jsonify({'success': True, 'message': 'Feedback updated successfully (in Excel fallback)'})
-            except Exception as excel_error:
-                logging.error(f"Error saving data to Excel: {str(excel_error)}")
-                return jsonify({'success': False, 'message': f'Error saving data: {str(e)} / {str(excel_error)}'}), 500
+            logging.error(f"Error saving data to Excel: {str(e)}")
+            return jsonify({'success': False, 'message': f'Error saving data: {str(e)}'}), 500
     
     except Exception as e:
         logging.error(f"Error updating feedback: {str(e)}")
