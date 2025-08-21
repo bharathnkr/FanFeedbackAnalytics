@@ -230,6 +230,21 @@ function updateFeedbackTable(feedback) {
             idCell.textContent = item.ID || '-';
             row.appendChild(idCell);
             
+            // Created Date column
+            const dateCell = document.createElement('td');
+            if (item['Date Submitted']) {
+                // Format the date nicely if it exists
+                const date = new Date(item['Date Submitted']);
+                if (!isNaN(date.getTime())) {
+                    dateCell.textContent = date.toLocaleDateString();
+                } else {
+                    dateCell.textContent = item['Date Submitted'];
+                }
+            } else {
+                dateCell.textContent = '-';
+            }
+            row.appendChild(dateCell);
+            
             // First Name column
             const firstNameCell = document.createElement('td');
             firstNameCell.textContent = item['First Name'] || '-';

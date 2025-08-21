@@ -511,9 +511,9 @@ def get_recent_feedback():
             df['Status'] = [random.choice(statuses) if df.loc[i, 'Contact User'] == 'Yes' else '' 
                            for i in range(len(df))]
         
-        # Sort by date if available
-        if 'Date' in df.columns:
-            df = df.sort_values(by='Date', ascending=False)
+        # Sort by Date Submitted in descending order (newest first)
+        if 'Date Submitted' in df.columns:
+            df = df.sort_values(by='Date Submitted', ascending=False)
         
         # Calculate total records and pages
         total_records = len(df)
